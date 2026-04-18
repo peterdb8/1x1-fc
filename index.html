@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<title>1×1 FC — Champions League 2025/26</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#0A1E3F" />
+<meta name="application-name" content="1×1 FC" />
+<meta name="description" content="Führe den FC Bayern durch die Saison. Bei jedem Torschuss entscheidet eine 1×1-Aufgabe." />
+
+<!-- iOS Home-Screen Support -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="1×1 FC" />
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+<link rel="icon" type="image/png" href="assets/favicon.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100%; background: #F4F5F8; font-family: 'Inter', -apple-system, sans-serif; color: #0A1E3F; }
+  body {
+    overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  body.in-match, body.in-match * { user-select: none; -webkit-user-select: none; }
+  button { font-family: inherit; }
+  input { font-family: inherit; }
+  #root { min-height: 100vh; }
+  /* Scrollbar dezent */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(10,30,63,0.2); border-radius: 4px; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Data & engine -->
+<script src="data/squad.js?v=3"></script>
+<script src="data/season.js"></script>
+<script src="data/league_teams.js"></script>
+<script src="engine/math.js"></script>
+<script src="engine/season.js"></script>
+<script src="engine/league_table.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- UI components -->
+<script type="text/babel" src="ui/common.jsx"></script>
+<script type="text/babel" src="ui/menu.jsx"></script>
+<script type="text/babel" src="ui/lineup.jsx"></script>
+<script type="text/babel" src="ui/duel.jsx"></script>
+<script type="text/babel" src="ui/controls.jsx"></script>
+<script type="text/babel" src="ui/gameplay.jsx"></script>
+<script type="text/babel" src="ui/learn.jsx"></script>
+
+<script type="text/babel">
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "accent": "#0066CC",
+  "numpadVisible": true,
+  "showDebugProfile": false,
+  "multiplicationRange": 10
+}/*EDITMODE-END*/;
+
+const { useState, useEffect, useRef } = React;
+
+function App() {
+  const [screen, setScreen] = useState("menu"); // menu | lineup | match | result | learn
+  const [seasonState, setSeasonState] = useState(() => window.SeasonStore.load());
+  const [matchIdx, setMatchIdx] = useState(null);
+  const [tweaksOpen, setTweaksOpen] = useState(false);
+  const [tweaksAvail, setTweaksAvail] = useState(false);
+  const [tweaks, setTweaks] = useState(TWEAKS);
+
+  useEffect(() => {
+    const listener = (e) => {
+      if (e.data?.type === "__activate_edit_mode") setTweaksOpen(true);
+      if (e.data?.type === "__deactivate_edit_mode") setTweaksOpen(false);
+    };
+    window.addEventListener("message", listener);
+    window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+    setTweaksAvail(true);
+    return () => window.removeEventListener("message", listener);
+  }, []);
+
+  const setTweak = (k, v) => {
+    const next = { ...tweaks, [k]: v };
+    setTweaks(next);
+    window.parent.postMessage({ type: "__edit_mode_set_keys", edits: { [k]: v } }, "*");
+  };
+
+  const startMatch = (idx) => {
+    setMatchIdx(idx);
+    setScreen("lineup");
+  };
+
+  const onConfirmLineup = (lineup) => {
+    const next = { ...seasonState, lineup };
+    setSeasonState(next);
+    window.SeasonStore.save(next);
+    setScreen("match");
+  };
+
+  const onMatchEnd = ({ myScore, oppScore }) => {
+    const outcome = myScore > oppScore ? "W" : myScore === oppScore ? "D" : "L";
+    const results = [...seasonState.results.filter(r => r.idx !== matchIdx), { idx: matchIdx, myScore, oppScore, outcome }];
+    const next = {
+      ...seasonState,
+      results,
+      currentMatchIdx: matchIdx + 1,
+    };
+    setSeasonState(next);
+    window.SeasonStore.save(next);
+    setScreen("menu");
+  };
+
+  const setDifficulty = (d) => {
+    const next = { ...seasonState, difficulty: d };
+    setSeasonState(next);
+    window.SeasonStore.save(next);
+  };
+
+  const resetSeason = () => {
+    if (!confirm("Saison UND Lernprofil zurücksetzen?")) return;
+    window.SeasonStore.reset();
+    window.MathEngine.reset();
+    setSeasonState(window.SeasonStore.load());
+    setScreen("menu");
+  };
+
+  const squad = window.BAYERN_SQUAD;
+  const match = matchIdx != null ? window.CL_SEASON[matchIdx] : null;
+
+  return (
+    <div>
+      {screen === "menu" && (
+        <window.MainMenu
+          onStartMatch={startMatch}
+          seasonState={seasonState}
+          onReset={resetSeason}
+          difficulty={seasonState.difficulty}
+          setDifficulty={setDifficulty}
+          onOpenLearn={() => setScreen("learn")}
+        />
+      )}
+      {screen === "learn" && (
+        <window.LearnProgress onBack={() => setScreen("menu")} />
+      )}
+      {screen === "lineup" && match && (
+        <window.Lineup
+          squad={squad}
+          initial={seasonState.lineup}
+          match={match}
+          onConfirm={onConfirmLineup}
+          onBack={() => setScreen("menu")}
+        />
+      )}
+      {screen === "match" && match && (
+        <window.Gameplay
+          match={match}
+          lineup={seasonState.lineup}
+          squad={squad}
+          difficulty={seasonState.difficulty}
+          onEnd={onMatchEnd}
+          onBackToMenu={() => setScreen("menu")}
+        />
+      )}
+
+      {tweaksOpen && (
+        <TweaksPanel tweaks={tweaks} setTweak={setTweak} onClose={() => setTweaksOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function TweaksPanel({ tweaks, setTweak, onClose }) {
+  const profile = window.MathEngine.loadProfile();
+  const rowStats = window.MathEngine.rowStats(profile);
+
+  return (
+    <div style={{
+      position: "fixed", right: 20, bottom: 20,
+      width: 340, background: "white",
+      borderRadius: 14, boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+      border: "2px solid #0A1E3F",
+      zIndex: 9999, overflow: "hidden",
+      maxHeight: "80vh", display: "flex", flexDirection: "column",
+    }}>
+      <div style={{ background: "#0A1E3F", color: "white", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 14, letterSpacing: 1 }}>TWEAKS</div>
+        <button onClick={onClose} style={{ background: "transparent", border: 0, color: "white", fontSize: 18, cursor: "pointer" }}>×</button>
+      </div>
+      <div style={{ padding: 16, overflowY: "auto" }}>
+        <TweakRow label="Akzentfarbe">
+          <div style={{ display: "flex", gap: 6 }}>
+            {["#DC0817", "#FFB800", "#2D7A3E", "#0066CC", "#9B59B6"].map(c => (
+              <button key={c} onClick={() => setTweak("accent", c)} style={{
+                width: 28, height: 28, borderRadius: "50%", background: c,
+                border: tweaks.accent === c ? "3px solid #0A1E3F" : "3px solid #EDEFF5",
+                cursor: "pointer",
+              }} />
+            ))}
+          </div>
+        </TweakRow>
+        <TweakRow label="Numpad sichtbar">
+          <input type="checkbox" checked={tweaks.numpadVisible} onChange={e => setTweak("numpadVisible", e.target.checked)} />
+        </TweakRow>
+        <TweakRow label="Zahlenbereich bis">
+          <select value={tweaks.multiplicationRange} onChange={e => setTweak("multiplicationRange", parseInt(e.target.value, 10))} style={{ padding: "4px 8px", borderRadius: 6 }}>
+            {[5, 7, 10].map(r => <option key={r} value={r}>bis {r}</option>)}
+          </select>
+        </TweakRow>
+
+        <div style={{ marginTop: 18, fontFamily: "'Archivo Black',sans-serif", fontSize: 11, letterSpacing: 1.5, color: "#DC0817" }}>LERNPROFIL — NACH REIHEN</div>
+        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
+          {rowStats.map(r => {
+            const pct = r.accuracy === null ? null : Math.round(r.accuracy * 100);
+            const bg = pct === null ? "#F4F5F8" : pct >= 90 ? "#E8F5EC" : pct >= 70 ? "#FFF3D6" : "#FDEDED";
+            const fg = pct === null ? "#999" : pct >= 90 ? "#2D7A3E" : pct >= 70 ? "#B88500" : "#DC0817";
+            return (
+              <div key={r.row} style={{ background: bg, borderRadius: 8, padding: "8px 4px", textAlign: "center" }}>
+                <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 16, color: "#0A1E3F" }}>{r.row}er</div>
+                <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 11, color: fg }}>
+                  {pct === null ? "—" : `${pct}%`}
+                </div>
+                <div style={{ fontFamily: "Inter", fontSize: 9, color: "#666" }}>{r.attempts}×</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 12, fontFamily: "Inter", fontSize: 11, color: "#666", lineHeight: 1.4 }}>
+          Grün ≥90% · Gelb ≥70% · Rot unter 70%. Das Spiel wählt bevorzugt schwächere Aufgaben.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const TweakRow = ({ label, children }) => (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, fontFamily: "Inter", fontSize: 13 }}>
+    <span style={{ color: "#0A1E3F" }}>{label}</span>
+    <span>{children}</span>
+  </div>
+);
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+<!-- Service Worker für Offline-Support -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch((err) => {
+        console.warn('SW registration failed:', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
