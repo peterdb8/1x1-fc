@@ -42,9 +42,25 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <!-- Data & engine -->
+<script src="data/teams.js"></script>
+<script src="data/badges.js"></script>
 <script src="data/squad.js?v=3"></script>
+<script src="data/squad_liverpool.js"></script>
+<script src="data/squad_realmadrid.js"></script>
 <script src="data/season.js"></script>
 <script src="data/league_teams.js"></script>
+<!-- Bayern seasons -->
+<script src="data/seasons/bayern_bundesliga.js"></script>
+<script src="data/seasons/bayern_dfbpokal.js"></script>
+<script src="data/seasons/bayern_cl.js"></script>
+<!-- Liverpool seasons -->
+<script src="data/seasons/liverpool_premierleague.js"></script>
+<script src="data/seasons/liverpool_facup.js"></script>
+<script src="data/seasons/liverpool_cl.js"></script>
+<!-- Real Madrid seasons -->
+<script src="data/seasons/realmadrid_laliga.js"></script>
+<script src="data/seasons/realmadrid_copadelrey.js"></script>
+<script src="data/seasons/realmadrid_cl.js"></script>
 <script src="engine/math.js"></script>
 <script src="engine/season.js"></script>
 <script src="engine/league_table.js"></script>
@@ -54,6 +70,8 @@
 
 <!-- UI components -->
 <script type="text/babel" src="ui/common.jsx"></script>
+<script type="text/babel" src="ui/team_select.jsx"></script>
+<script type="text/babel" src="ui/competition_select.jsx"></script>
 <script type="text/babel" src="ui/menu.jsx"></script>
 <script type="text/babel" src="ui/lineup.jsx"></script>
 <script type="text/babel" src="ui/duel.jsx"></script>
@@ -71,13 +89,58 @@ const TWEAKS = /*EDITMODE-BEGIN*/{
 
 const { useState, useEffect, useRef } = React;
 
+// Hilfsfunktion um den Kader für ein Team zu bekommen
+function getSquadForTeam(teamId) {
+  switch(teamId) {
+    case 'bayern': return window.BAYERN_SQUAD;
+    case 'liverpool': return window.LIVERPOOL_SQUAD;
+    case 'realmadrid': return window.REALMADRID_SQUAD;
+    default: return window.BAYERN_SQUAD;
+  }
+}
+
+// Hilfsfunktion um die Saison-Daten für Team+Wettbewerb zu bekommen
+function getSeasonData(teamId, competitionId) {
+  const key = `${teamId}_${competitionId}`;
+  switch(key) {
+    // Bayern
+    case 'bayern_cl': return { matches: window.BAYERN_CL, difficulty: window.BAYERN_CL_DIFFICULTY };
+    case 'bayern_bundesliga': return { matches: window.BAYERN_BUNDESLIGA, difficulty: window.BUNDESLIGA_DIFFICULTY };
+    case 'bayern_dfbpokal': return { matches: window.BAYERN_DFBPOKAL, difficulty: window.DFBPOKAL_DIFFICULTY };
+    // Liverpool
+    case 'liverpool_cl': return { matches: window.LIVERPOOL_CL, difficulty: window.LIVERPOOL_CL_DIFFICULTY };
+    case 'liverpool_premierleague': return { matches: window.LIVERPOOL_PREMIERLEAGUE, difficulty: window.PREMIERLEAGUE_DIFFICULTY };
+    case 'liverpool_facup': return { matches: window.LIVERPOOL_FACUP, difficulty: window.FACUP_DIFFICULTY };
+    // Real Madrid
+    case 'realmadrid_cl': return { matches: window.REALMADRID_CL, difficulty: window.REALMADRID_CL_DIFFICULTY };
+    case 'realmadrid_laliga': return { matches: window.REALMADRID_LALIGA, difficulty: window.LALIGA_DIFFICULTY };
+    case 'realmadrid_copadelrey': return { matches: window.REALMADRID_COPADELREY, difficulty: window.COPADELREY_DIFFICULTY };
+    // Fallback
+    default: return { matches: window.CL_SEASON, difficulty: window.CL_DIFFICULTY };
+  }
+}
+
 function App() {
-  const [screen, setScreen] = useState("menu"); // menu | lineup | match | result | learn
+  // Screens: teamSelect | competitionSelect | menu | lineup | match | learn
+  const [screen, setScreen] = useState("teamSelect");
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [selectedCompetition, setSelectedCompetition] = useState(null);
   const [seasonState, setSeasonState] = useState(() => window.SeasonStore.load());
   const [matchIdx, setMatchIdx] = useState(null);
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const [tweaksAvail, setTweaksAvail] = useState(false);
   const [tweaks, setTweaks] = useState(TWEAKS);
+
+  // Prüfe ob bereits eine laufende Saison existiert
+  useEffect(() => {
+    const saved = window.SeasonStore.load();
+    if (saved.teamId && saved.competitionId && saved.results.length > 0) {
+      setSelectedTeam(saved.teamId);
+      setSelectedCompetition(saved.competitionId);
+      setSeasonState(saved);
+      setScreen("menu");
+    }
+  }, []);
 
   useEffect(() => {
     const listener = (e) => {
@@ -94,6 +157,27 @@ function App() {
     const next = { ...tweaks, [k]: v };
     setTweaks(next);
     window.parent.postMessage({ type: "__edit_mode_set_keys", edits: { [k]: v } }, "*");
+  };
+
+  const onSelectTeam = (teamId) => {
+    setSelectedTeam(teamId);
+    setScreen("competitionSelect");
+  };
+
+  const onSelectCompetition = (competitionId) => {
+    setSelectedCompetition(competitionId);
+    // Neue Saison starten
+    const newSeason = {
+      teamId: selectedTeam,
+      competitionId: competitionId,
+      results: [],
+      currentMatchIdx: 0,
+      lineup: [],
+      difficulty: "medium",
+    };
+    setSeasonState(newSeason);
+    window.SeasonStore.save(newSeason);
+    setScreen("menu");
   };
 
   const startMatch = (idx) => {
@@ -128,26 +212,64 @@ function App() {
   };
 
   const resetSeason = () => {
+    if (!confirm("Saison zurücksetzen und neues Team wählen?")) return;
+    window.SeasonStore.reset();
+    setSeasonState(window.SeasonStore.load());
+    setSelectedTeam(null);
+    setSelectedCompetition(null);
+    setScreen("teamSelect");
+  };
+
+  const resetSeasonAndProfile = () => {
     if (!confirm("Saison UND Lernprofil zurücksetzen?")) return;
     window.SeasonStore.reset();
     window.MathEngine.reset();
     setSeasonState(window.SeasonStore.load());
-    setScreen("menu");
+    setSelectedTeam(null);
+    setSelectedCompetition(null);
+    setScreen("teamSelect");
   };
 
-  const squad = window.BAYERN_SQUAD;
-  const match = matchIdx != null ? window.CL_SEASON[matchIdx] : null;
+  // Aktuelle Daten basierend auf Auswahl
+  const squad = selectedTeam ? getSquadForTeam(selectedTeam) : [];
+  const seasonData = (selectedTeam && selectedCompetition) ? getSeasonData(selectedTeam, selectedCompetition) : { matches: [], difficulty: {} };
+  const match = matchIdx != null ? seasonData.matches[matchIdx] : null;
+  const team = selectedTeam ? window.TEAMS[selectedTeam] : null;
+  const competition = selectedCompetition ? window.COMPETITIONS[selectedCompetition] : null;
 
   return (
     <div>
+      {screen === "teamSelect" && (
+        <window.TeamSelect onSelectTeam={onSelectTeam} />
+      )}
+      {screen === "competitionSelect" && selectedTeam && (
+        <window.CompetitionSelect
+          teamId={selectedTeam}
+          onSelectCompetition={onSelectCompetition}
+          onBack={() => setScreen("teamSelect")}
+        />
+      )}
       {screen === "menu" && (
         <window.MainMenu
           onStartMatch={startMatch}
           seasonState={seasonState}
+          seasonData={seasonData}
+          team={team}
+          competition={competition}
           onReset={resetSeason}
+          onResetAll={resetSeasonAndProfile}
           difficulty={seasonState.difficulty}
           setDifficulty={setDifficulty}
           onOpenLearn={() => setScreen("learn")}
+          onNewSeason={() => {
+            if (confirm("Neue Saison starten? Fortschritt geht verloren.")) {
+              window.SeasonStore.reset();
+              setSeasonState(window.SeasonStore.load());
+              setSelectedTeam(null);
+              setSelectedCompetition(null);
+              setScreen("teamSelect");
+            }
+          }}
         />
       )}
       {screen === "learn" && (
@@ -158,6 +280,7 @@ function App() {
           squad={squad}
           initial={seasonState.lineup}
           match={match}
+          team={team}
           onConfirm={onConfirmLineup}
           onBack={() => setScreen("menu")}
         />
@@ -167,7 +290,9 @@ function App() {
           match={match}
           lineup={seasonState.lineup}
           squad={squad}
+          team={team}
           difficulty={seasonState.difficulty}
+          difficultyConfig={seasonData.difficulty}
           onEnd={onMatchEnd}
           onBackToMenu={() => setScreen("menu")}
         />

@@ -10,9 +10,63 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const norm = (v) => { const l = Math.hypot(v.x, v.y) || 1; return { x: v.x / l, y: v.y / l }; };
 
-const Gameplay = ({ match, lineup, squad, difficulty, onEnd, onBackToMenu }) => {
+// Farbkollisions-Erkennung: Prüft ob zwei Hex-Farben zu ähnlich sind
+const hexToHsl = (hex) => {
+  const r = parseInt(hex.slice(1,3), 16) / 255;
+  const g = parseInt(hex.slice(3,5), 16) / 255;
+  const b = parseInt(hex.slice(5,7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) { h = s = 0; }
+  else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return { h: h * 360, s: s * 100, l: l * 100 };
+};
+
+const colorsTooSimilar = (color1, color2) => {
+  if (!color1 || !color2) return false;
+  try {
+    const hsl1 = hexToHsl(color1);
+    const hsl2 = hexToHsl(color2);
+    const hueDiff = Math.min(Math.abs(hsl1.h - hsl2.h), 360 - Math.abs(hsl1.h - hsl2.h));
+    // Farben sind zu ähnlich wenn: gleicher Farbton UND ähnliche Helligkeit
+    return hueDiff < 30 && Math.abs(hsl1.l - hsl2.l) < 25;
+  } catch { return false; }
+};
+
+// Gibt eine Alternativfarbe zurück, die nicht mit der Teamfarbe kollidiert
+const getContrastColor = (oppColor, teamColor) => {
+  if (!colorsTooSimilar(oppColor, teamColor)) return oppColor;
+  // Alternativfarben für häufige Kollisionen
+  const alternatives = {
+    // Rot-Kollisionen → Weiß oder Dunkelblau
+    red: "#FFFFFF",
+    // Blau-Kollisionen → Weiß
+    blue: "#FFFFFF",
+    // Allgemeiner Fallback
+    default: "#1A1A1A"
+  };
+  const hsl = hexToHsl(oppColor);
+  if (hsl.h < 30 || hsl.h > 330) return alternatives.red; // Rot-Töne
+  if (hsl.h > 180 && hsl.h < 260) return alternatives.blue; // Blau-Töne
+  return alternatives.default;
+};
+
+const Gameplay = ({ match, lineup, squad, team, difficulty, onEnd, onBackToMenu }) => {
   const playerByN = Object.fromEntries(squad.map(p => [p.n, p]));
   const formSlots = window.FORMATIONS[lineup.formation];
+
+  // Team-Farben mit Kollisionsvermeidung
+  const myColor = team?.colors?.primary || "#DC0817";
+  const oppColorRaw = match.color || "#333333";
+  const oppColor = getContrastColor(oppColorRaw, myColor);
 
   // --- Game state (React) ---
   const [phase, setPhase] = useState("kickoff"); // kickoff | play | duel | halftime | ended
@@ -588,7 +642,7 @@ const Gameplay = ({ match, lineup, squad, difficulty, onEnd, onBackToMenu }) => 
           {players.map(p => {
             const isActive = p.id === activeId;
             const isOpp = p.team === "opp";
-            const color = isOpp ? match.color : "#DC0817";
+            const color = isOpp ? oppColor : myColor;
             const size = isActive ? 30 : 24;
             const label = isOpp ? "" : (playerByN[p.n]?.n ?? "");
             return (
@@ -630,7 +684,12 @@ const Gameplay = ({ match, lineup, squad, difficulty, onEnd, onBackToMenu }) => 
           {phase === "kickoff" && (
             <Overlay>
               <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 11, letterSpacing: 3, color: "#FFB800" }}>{match.mdLabel.toUpperCase()}</div>
-              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, color: "white", margin: "8px 0 4px", textAlign: "center" }}>FCB {match.home ? "vs" : "@"} {match.opp}</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20, margin: "16px 0 8px" }}>
+                <TeamBadge name={match.teamShort || "FCB"} color={myColor} badgeUrl={match.teamBadge} />
+                <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 32, color: "white" }}>{match.home ? "vs" : "@"}</div>
+                <TeamBadge name={match.oppShort} color={oppColor} />
+              </div>
+              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 18, color: "rgba(255,255,255,0.8)", marginBottom: 12 }}>{match.teamShort || "FCB"} vs {match.opp}</div>
               <div style={{ fontFamily: "Inter", fontSize: 12, color: "rgba(255,255,255,0.75)", marginBottom: 18, textAlign: "center", maxWidth: 520 }}>
                 {window.IS_TOUCH
                   ? "Joystick links zum Bewegen · rechte Buttons für Aktionen · Tippen/Wischen auf dem Feld für Pass & Schuss"
@@ -759,11 +818,11 @@ const Gameplay = ({ match, lineup, squad, difficulty, onEnd, onBackToMenu }) => 
             boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
             color: "white",
           }}>
-            <TeamBadge name="FCB" color="#DC0817" small />
+            <TeamBadge name={match.teamShort || "FCB"} color={myColor} small badgeUrl={match.teamBadge} />
             <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, letterSpacing: "-0.5px", minWidth: 68, textAlign: "center" }}>
               {myScore}<span style={{ opacity: 0.5, margin: "0 6px" }}>:</span>{oppScore}
             </div>
-            <TeamBadge name={match.oppShort} color={match.color} small />
+            <TeamBadge name={match.oppShort} color={oppColor} small />
             <div style={{ width: 1, height: 22, background: "rgba(255,255,255,0.18)" }} />
             <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 14, letterSpacing: "-0.3px", color: "#FFB800", minWidth: 48, textAlign: "center" }}>
               {formatTime(MATCH_DURATION_MS - timeLeft)}'
@@ -821,17 +880,36 @@ const Gameplay = ({ match, lineup, squad, difficulty, onEnd, onBackToMenu }) => 
   );
 };
 
-const TeamBadge = ({ name, color, small }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <div style={{
-      width: small ? 26 : 32, height: small ? 26 : 32, borderRadius: small ? 6 : 8,
-      background: color,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontFamily: "'Archivo Black',sans-serif", fontSize: small ? 9 : 11,
-      color: "white", border: "2px solid rgba(255,255,255,0.3)",
-    }}>{name}</div>
-  </div>
-);
+const TeamBadge = ({ name, color, small, badgeUrl }) => {
+  const size = small ? 26 : 32;
+  const hasBadge = badgeUrl || (window.TEAM_BADGES && window.TEAM_BADGES[name]);
+  const imgUrl = badgeUrl || (window.TEAM_BADGES && window.TEAM_BADGES[name]);
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {hasBadge ? (
+        <img
+          src={imgUrl}
+          alt={name}
+          style={{
+            width: size,
+            height: size,
+            objectFit: "contain",
+            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
+          }}
+        />
+      ) : (
+        <div style={{
+          width: size, height: size, borderRadius: small ? 6 : 8,
+          background: color,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: "'Archivo Black',sans-serif", fontSize: small ? 9 : 11,
+          color: "white", border: "2px solid rgba(255,255,255,0.3)",
+        }}>{name}</div>
+      )}
+    </div>
+  );
+};
 
 const ActionBtn = ({ label, keyHint, onClick, color, fg = "white" }) => (
   <button onClick={onClick} style={{

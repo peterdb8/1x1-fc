@@ -1,6 +1,15 @@
 // Main Menu / Saison-Übersicht (Bracket)
-const MainMenu = ({ onStartMatch, seasonState, onReset, difficulty, setDifficulty, onOpenLearn }) => {
-  const season = window.CL_SEASON;
+const MainMenu = ({ onStartMatch, seasonState, seasonData, team, competition, onReset, onResetAll, difficulty, setDifficulty, onOpenLearn, onNewSeason }) => {
+  // Fallback auf alte Struktur wenn keine neuen Props
+  const season = seasonData?.matches || window.CL_SEASON;
+  const difficultyConfig = seasonData?.difficulty || window.CL_DIFFICULTY;
+  const teamName = team?.shortName || "FC Bayern";
+  const teamInitials = team?.id === 'liverpool' ? 'LFC' : team?.id === 'realmadrid' ? 'RMA' : 'FCB';
+  const teamColor = team?.colors?.primary || "#DC0817";
+  const competitionName = competition?.name || "UEFA Champions League";
+  const competitionShort = competition?.shortName || "Champions League";
+  const isLeague = competition?.type === 'league';
+  const isCup = competition?.type === 'cup';
   const profile = window.MathEngine.loadProfile();
 
   const accuracy = profile.totalAttempts > 0 ? Math.round(profile.totalCorrect / profile.totalAttempts * 100) : 0;
@@ -22,14 +31,43 @@ const MainMenu = ({ onStartMatch, seasonState, onReset, difficulty, setDifficult
   const timeHit = avgMs > 0 && avgMs < TIME_TARGET_MS;
   const accHit = accuracy >= 100 && totalAttempts > 0;
 
-  const rounds = [
-    { key: "Ligaphase", label: "Ligaphase", items: season.slice(0, 8) },
-    { key: "Playoff", label: "Playoff", items: season.slice(8, 9) },
-    { key: "Achtelfinale", label: "Achtelfinale", items: season.slice(9, 10) },
-    { key: "Viertelfinale", label: "Viertelfinale", items: season.slice(10, 11) },
-    { key: "Halbfinale", label: "Halbfinale", items: season.slice(11, 12) },
-    { key: "Finale", label: "Finale", items: season.slice(12, 13) },
-  ];
+  // Dynamische Runden basierend auf Wettbewerbstyp
+  const rounds = React.useMemo(() => {
+    if (isLeague) {
+      // Liga: Gruppiere nach Spieltagen (je 4-5 pro Gruppe)
+      const groupSize = 6;
+      const groups = [];
+      for (let i = 0; i < season.length; i += groupSize) {
+        const chunk = season.slice(i, i + groupSize);
+        const startMd = i + 1;
+        const endMd = Math.min(i + groupSize, season.length);
+        groups.push({
+          key: `md_${startMd}`,
+          label: `Spieltag ${startMd}–${endMd}`,
+          items: chunk,
+        });
+      }
+      return groups;
+    } else if (isCup) {
+      // Pokal: Gruppiere nach Runden
+      const roundGroups = {};
+      season.forEach(m => {
+        if (!roundGroups[m.round]) roundGroups[m.round] = [];
+        roundGroups[m.round].push(m);
+      });
+      return Object.entries(roundGroups).map(([key, items]) => ({ key, label: key, items }));
+    } else {
+      // CL: Originale Struktur
+      return [
+        { key: "Ligaphase", label: "Ligaphase", items: season.slice(0, 8) },
+        { key: "Playoff", label: "Playoff", items: season.slice(8, 9) },
+        { key: "Achtelfinale", label: "Achtelfinale", items: season.slice(9, 10) },
+        { key: "Viertelfinale", label: "Viertelfinale", items: season.slice(10, 11) },
+        { key: "Halbfinale", label: "Halbfinale", items: season.slice(11, 12) },
+        { key: "Finale", label: "Finale", items: season.slice(12, 13) },
+      ];
+    }
+  }, [season, isLeague, isCup]);
 
   const resultFor = (idx) => seasonState.results.find(r => r.idx === idx);
 
@@ -41,21 +79,49 @@ const MainMenu = ({ onStartMatch, seasonState, onReset, difficulty, setDifficult
         borderRadius: 20, padding: "28px 32px", color: "white",
         marginBottom: 28, position: "relative", overflow: "hidden",
       }}>
-        <div style={{ position: "absolute", right: -60, top: -60, width: 240, height: 240, borderRadius: "50%", background: "#DC0817", opacity: 0.2 }} />
+        <div style={{ position: "absolute", right: -60, top: -60, width: 240, height: 240, borderRadius: "50%", background: teamColor, opacity: 0.2 }} />
         <div style={{ position: "absolute", right: 40, bottom: -40, width: 120, height: 120, borderRadius: "50%", background: "#FFB800", opacity: 0.25 }} />
         <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
           <div>
-            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 11, letterSpacing: 3, color: "#FFB800" }}>UEFA CHAMPIONS LEAGUE · 2025/26</div>
+            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 11, letterSpacing: 3, color: "#FFB800" }}>{competitionName.toUpperCase()} · 2025/26</div>
             <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 52, margin: "4px 0 0", letterSpacing: "-1.5px", lineHeight: 1 }}>1×1 FC</h1>
             <div style={{ marginTop: 8, fontFamily: "Inter", fontSize: 15, opacity: 0.85 }}>
-              Führe den FC Bayern zum Titel. Bei jedem Torschuss entscheidet eine 1×1-Aufgabe.
+              Führe {teamName} zum Titel. Bei jedem Torschuss entscheidet eine 1×1-Aufgabe.
             </div>
           </div>
-          <div style={{ display: "flex", gap: 24 }}>
-            <Stat k="Spiele" v={`${seasonState.results.length}/13`} />
+          <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+            {team?.badge ? (
+              <img src={team.badge} alt={teamName} style={{
+                width: 64, height: 64, objectFit: "contain",
+                filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.3))",
+              }} />
+            ) : (
+              <div style={{
+                width: 56, height: 56, borderRadius: 12,
+                background: `linear-gradient(145deg, ${teamColor}, ${team?.colors?.secondary || '#0A1E3F'})`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: "'Archivo Black',sans-serif", fontSize: 18, color: "white",
+                border: "3px solid rgba(255,255,255,0.3)",
+              }}>{teamInitials}</div>
+            )}
+            <div>
+              <Stat k="Spiele" v={`${seasonState.results.length}/${season.length}`} />
+            </div>
             <Stat k="Aufgaben" v={totalAttempts} />
           </div>
         </div>
+        {/* Neue Saison Button */}
+        {onNewSeason && (
+          <button onClick={onNewSeason} style={{
+            position: "absolute", top: 16, right: 16,
+            background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)",
+            borderRadius: 8, padding: "6px 12px",
+            fontFamily: "Inter", fontSize: 11, fontWeight: 600,
+            color: "rgba(255,255,255,0.8)", cursor: "pointer",
+          }}>
+            Neues Team wählen
+          </button>
+        )}
       </div>
 
       {/* 1×1 KPIs */}
@@ -137,11 +203,13 @@ const MainMenu = ({ onStartMatch, seasonState, onReset, difficulty, setDifficult
       {/* Bracket */}
       <SectionHead
         eyebrow="Saison-Plan"
-        title="Weg zum Finale"
+        title={isLeague ? "Meisterschaft" : isCup ? "Pokalweg" : "Weg zum Finale"}
         right={
-          <BigButton variant="ghost" onClick={onReset} style={{ fontSize: 12, padding: "10px 14px" }}>
-            Saison zurücksetzen
-          </BigButton>
+          <div style={{ display: "flex", gap: 8 }}>
+            <BigButton variant="ghost" onClick={onReset} style={{ fontSize: 12, padding: "10px 14px" }}>
+              Saison zurücksetzen
+            </BigButton>
+          </div>
         }
       />
 
@@ -167,7 +235,7 @@ const MainMenu = ({ onStartMatch, seasonState, onReset, difficulty, setDifficult
               );
             })}
           </div>
-          {group.key === "Ligaphase" && <LigaphaseTable seasonState={seasonState} />}
+          {group.key === "Ligaphase" && !isLeague && !isCup && <LigaphaseTable seasonState={seasonState} teamInitials={teamInitials} />}
         </div>
       ))}
 
@@ -240,14 +308,25 @@ const MatchCard = ({ match, result, isNext, isLocked, onClick }) => {
         )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 8, background: match.color,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontFamily: "'Archivo Black',sans-serif", fontSize: 13, color: "white", flexShrink: 0,
-        }}>{match.oppShort}</div>
+        {window.TEAM_BADGES && window.TEAM_BADGES[match.oppShort] ? (
+          <img
+            src={window.TEAM_BADGES[match.oppShort]}
+            alt={match.oppShort}
+            style={{
+              width: 40, height: 40, objectFit: "contain", flexShrink: 0,
+              filter: isLocked ? "grayscale(0.5)" : "none",
+            }}
+          />
+        ) : (
+          <div style={{
+            width: 40, height: 40, borderRadius: 8, background: match.color,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: "'Archivo Black',sans-serif", fontSize: 13, color: "white", flexShrink: 0,
+          }}>{match.oppShort}</div>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 14, color: "#0A1E3F", letterSpacing: "-0.3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {match.home ? "FCB vs " : "@ "}{match.opp}
+            {match.home ? "vs " : "@ "}{match.opp}
           </div>
           <div style={{ fontFamily: "Inter", fontSize: 11, color: "#666" }}>
             {result ? `${result.myScore}:${result.oppScore} · ${result.outcome === "W" ? "Sieg" : result.outcome === "D" ? "Remis" : "Niederlage"}` : match.date}
@@ -263,10 +342,10 @@ Object.assign(window, { MainMenu });
 // ============================================================
 // LIGAPHASEN-TABELLE (alle 36 Teams, FCB highlighted)
 // ============================================================
-function LigaphaseTable({ seasonState }) {
+function LigaphaseTable({ seasonState, teamInitials = "FCB" }) {
   const [expanded, setExpanded] = React.useState(false);
   const rows = React.useMemo(() => window.LeagueTable.computeTable(seasonState), [seasonState]);
-  const fcbRow = rows.find(r => r.team.short === "FCB");
+  const fcbRow = rows.find(r => r.team.short === teamInitials);
   const playedCount = seasonState.results.filter(r => r.idx < 8).length;
 
   // Zeilen-Slots: Top 8 (Achtelfinale), 9–24 (Playoffs), 25–36 (raus)
@@ -315,7 +394,7 @@ function LigaphaseTable({ seasonState }) {
           </thead>
           <tbody>
             {visibleRows.map(r => {
-              const isFcb = r.team.short === "FCB";
+              const isFcb = r.team.short === teamInitials;
               const { border, bg } = slotBg(r.position);
               return (
                 <tr key={r.idx} style={{
@@ -329,15 +408,27 @@ function LigaphaseTable({ seasonState }) {
                   </td>
                   <td style={{ padding: "8px 6px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{
-                        width: 24, height: 24, borderRadius: 5,
-                        background: r.team.color,
-                        color: "white",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontFamily: "'Archivo Black',sans-serif", fontSize: 9, letterSpacing: 0.3,
-                        flexShrink: 0,
-                        border: isFcb ? "2px solid white" : "none",
-                      }}>{r.team.short}</div>
+                      {window.TEAM_BADGES && window.TEAM_BADGES[r.team.short] ? (
+                        <img
+                          src={window.getBadgeUrl ? window.getBadgeUrl(r.team.short, 'tiny') : window.TEAM_BADGES[r.team.short]}
+                          alt={r.team.short}
+                          style={{
+                            width: 24, height: 24, objectFit: "contain", flexShrink: 0,
+                            border: isFcb ? "2px solid white" : "none",
+                            borderRadius: isFcb ? 4 : 0,
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: 24, height: 24, borderRadius: 5,
+                          background: r.team.color,
+                          color: "white",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontFamily: "'Archivo Black',sans-serif", fontSize: 9, letterSpacing: 0.3,
+                          flexShrink: 0,
+                          border: isFcb ? "2px solid white" : "none",
+                        }}>{r.team.short}</div>
+                      )}
                       <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 13, letterSpacing: "-0.2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {r.team.name}
                       </div>

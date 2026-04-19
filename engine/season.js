@@ -12,10 +12,12 @@ window.SeasonStore = (function() {
 
   function empty() {
     return {
+      teamId: null,            // 'bayern' | 'liverpool' | 'realmadrid'
+      competitionId: null,     // 'cl' | 'bundesliga' | 'premierleague' | etc.
       currentMatchIdx: 0,      // nächstes zu spielendes Spiel
       results: [],             // { idx, myScore, oppScore, outcome: "W"|"D"|"L" }
-      lineup: null,            // { formation, slots: { slotId: playerN } }
-      difficulty: "easy",      // "easy" | "medium" | "hard"
+      lineup: [],              // Array of player indices
+      difficulty: "medium",    // "easy" | "medium" | "hard"
       lastSavedAt: Date.now(),
     };
   }

@@ -1,7 +1,7 @@
 // 1×1 FC — Service Worker
 // Offline-first: cache everything on install, serve cache, update in background.
 
-const CACHE = '1x1fc-v2';
+const CACHE = '1x1fc-v6';
 
 // Alle App-Shell-Assets + Karten + CDN-Abhängigkeiten
 const ASSETS = [
@@ -10,15 +10,33 @@ const ASSETS = [
   'manifest.webmanifest',
 
   // Data & engine
+  'data/teams.js',
   'data/squad.js',
+  'data/squad_liverpool.js',
+  'data/squad_realmadrid.js',
   'data/season.js',
   'data/league_teams.js',
+  'data/badges.js',
+  // Bayern seasons
+  'data/seasons/bayern_bundesliga.js',
+  'data/seasons/bayern_dfbpokal.js',
+  'data/seasons/bayern_cl.js',
+  // Liverpool seasons
+  'data/seasons/liverpool_premierleague.js',
+  'data/seasons/liverpool_facup.js',
+  'data/seasons/liverpool_cl.js',
+  // Real Madrid seasons
+  'data/seasons/realmadrid_laliga.js',
+  'data/seasons/realmadrid_copadelrey.js',
+  'data/seasons/realmadrid_cl.js',
   'engine/math.js',
   'engine/season.js',
   'engine/league_table.js',
 
   // UI
   'ui/common.jsx',
+  'ui/team_select.jsx',
+  'ui/competition_select.jsx',
   'ui/menu.jsx',
   'ui/lineup.jsx',
   'ui/duel.jsx',

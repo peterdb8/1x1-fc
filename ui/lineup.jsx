@@ -69,8 +69,23 @@ const Lineup = ({ squad, initial, onConfirm, onBack, match }) => {
           <BigButton variant="ghost" onClick={onBack} style={{ fontSize: 12, padding: "10px 14px" }}>← Zurück</BigButton>
         </div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 10, letterSpacing: 2, color: "#DC0817" }}>{match.mdLabel.toUpperCase()}</div>
-          <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, color: "#0A1E3F" }}>FCB {match.home ? "vs" : "@"} {match.opp}</div>
+          <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 10, letterSpacing: 2, color: "#DC0817", marginBottom: 6 }}>{match.mdLabel.toUpperCase()}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            {/* Eigenes Team Badge */}
+            {match.teamBadge ? (
+              <img src={match.teamBadge} alt={match.teamShort || "Team"} style={{ width: 36, height: 36, objectFit: "contain" }} />
+            ) : (
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: "#DC0817", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Archivo Black',sans-serif", fontSize: 10, color: "white" }}>{match.teamShort || "FCB"}</div>
+            )}
+            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, color: "#0A1E3F" }}>{match.home ? "vs" : "@"}</div>
+            {/* Gegner Badge */}
+            {window.TEAM_BADGES && window.TEAM_BADGES[match.oppShort] ? (
+              <img src={window.TEAM_BADGES[match.oppShort]} alt={match.oppShort} style={{ width: 36, height: 36, objectFit: "contain" }} />
+            ) : (
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: match.color || "#333", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Archivo Black',sans-serif", fontSize: 10, color: "white" }}>{match.oppShort}</div>
+            )}
+          </div>
+          <div style={{ fontFamily: "Inter", fontSize: 12, color: "#666", marginTop: 4 }}>{match.teamShort || "FCB"} vs {match.opp}</div>
         </div>
         <BigButton variant="primary" onClick={() => onConfirm({ formation, slots })} disabled={!complete}>
           Anpfiff →
