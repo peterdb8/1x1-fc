@@ -1,6 +1,15 @@
-// Team Badges von TheSportsDB
-// Alle Badge-URLs nutzen das CDN: https://r2.thesportsdb.com/images/media/team/badge/
-// Für kleinere Größen: URL + /small (250px) oder /tiny (50px)
+// Team Badges von TheSportsDB (strBadge, CDN: …/images/media/team/badge/)
+// Größen: URL + /small (250px) oder /tiny (50px)
+//
+// Abdeckung nach Wettbewerb (Saisondaten unter data/seasons/):
+//   Bundesliga, Premier League, La Liga, DFB-Pokal, FA Cup, Copa del Rey, Champions League (+ CL-Ligatabelle league_teams.js)
+//
+// Kurzcodes mit Namenskollisionen (bitte in Spielplänen getrennt halten):
+//   BAR = FC Barcelona  |  BAR_ENG = Barnsley FC (England)
+//   CEL = RC Celta Vigo  |  CEL_SCO = Celtic Glasgow
+//   BRE = Brentford FC   |  SB29 = Stade Brest 29 (Frankreich)
+//   BIL = Athletic Bilbao (Alias wie in CL_LEAGUE_TEAMS; gleiches Wappen wie ATH)
+//   SPL = Sporting CP (Alias für „Sport Lissabon“ in CL_LEAGUE_TEAMS; gleiches Wappen wie SPO)
 
 window.TEAM_BADGES = {
   // === Spielbare Teams ===
@@ -53,6 +62,7 @@ window.TEAM_BADGES = {
   "BAR": "https://r2.thesportsdb.com/images/media/team/badge/wq9sir1639406443.png", // Barcelona
   "ATM": "https://r2.thesportsdb.com/images/media/team/badge/0ulh3q1719984315.png", // Atlético Madrid
   "ATH": "https://r2.thesportsdb.com/images/media/team/badge/68w7fe1639408210.png", // Athletic Bilbao
+  "BIL": "https://r2.thesportsdb.com/images/media/team/badge/68w7fe1639408210.png", // Athletic Bilbao (Alias CL-Tabelle)
   "RSO": "https://r2.thesportsdb.com/images/media/team/badge/vptvpr1473502986.png", // Real Sociedad
   "VIL": "https://r2.thesportsdb.com/images/media/team/badge/vrypqy1473503073.png", // Villarreal
   "BET": "https://r2.thesportsdb.com/images/media/team/badge/kh3pnr1554130721.png", // Real Betis
@@ -80,6 +90,7 @@ window.TEAM_BADGES = {
   "ATA": "https://r2.thesportsdb.com/images/media/team/badge/ksm1lq1697296111.png", // Atalanta
   "BEN": "https://r2.thesportsdb.com/images/media/team/badge/kfgpjf1601758050.png", // Benfica
   "SPO": "https://r2.thesportsdb.com/images/media/team/badge/hf97tc1631801739.png", // Sporting CP
+  "SPL": "https://r2.thesportsdb.com/images/media/team/badge/hf97tc1631801739.png", // Sporting CP (Alias CL-Tabelle)
   "PSV": "https://r2.thesportsdb.com/images/media/team/badge/syqrxy1473502881.png", // PSV Eindhoven
   "AJX": "https://r2.thesportsdb.com/images/media/team/badge/bb7s0c1655403122.png", // Ajax
   "BRU": "https://r2.thesportsdb.com/images/media/team/badge/fvjpvv1428588739.png", // Club Brugge
@@ -95,7 +106,7 @@ window.TEAM_BADGES = {
   "PAF": "https://r2.thesportsdb.com/images/media/team/badge/26l9iu1692373655.png", // Pafos FC
   "QAR": "https://r2.thesportsdb.com/images/media/team/badge/7o1n3f1549206549.png", // Qarabag
   "SAL": "https://r2.thesportsdb.com/images/media/team/badge/zxqtvq1473532061.png", // RB Salzburg
-  "CEL_SCO": "https://r2.thesportsdb.com/images/media/team/badge/hyq1dj1548192519.png", // Celtic FC
+  "CEL_SCO": "https://r2.thesportsdb.com/images/media/team/badge/3uv1641758780002.png", // Celtic FC (Schottland)
   "BOL": "https://r2.thesportsdb.com/images/media/team/badge/uyxsqs1473502604.png", // Bologna
   "SB29": "https://r2.thesportsdb.com/images/media/team/badge/xpxsrs1473504764.png", // Stade Brest
   "FEY": "https://r2.thesportsdb.com/images/media/team/badge/trwwpv1473502873.png", // Feyenoord
@@ -123,7 +134,7 @@ window.TEAM_BADGES = {
   "EBS": "https://r2.thesportsdb.com/images/media/team/badge/ttssqs1473452969.png", // Eintracht Braunschweig
 
   // === FA Cup Teams ===
-  "BAR_ENG": "https://r2.thesportsdb.com/images/media/team/badge/c17v951599833881.png", // Barnsley
+  "BAR_ENG": "https://r2.thesportsdb.com/images/media/team/badge/xvxsuv1447437855.png", // Barnsley FC
   "SHU": "https://r2.thesportsdb.com/images/media/team/badge/afqvto1641827807.png", // Sheffield United
   "SHW": "https://r2.thesportsdb.com/images/media/team/badge/eudewi1641476059.png", // Sheffield Wednesday
   "WBA": "https://r2.thesportsdb.com/images/media/team/badge/quqqvy1448813205.png", // West Brom

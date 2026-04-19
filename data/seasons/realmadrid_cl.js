@@ -10,10 +10,10 @@ window.REALMADRID_CL = [
   { round: "Ligaphase",   mdLabel: "Matchday 5", opp: "Liverpool FC",       oppShort: "LIV", home: false, color: "#C8102E", date: "25.11.25" },
   { round: "Ligaphase",   mdLabel: "Matchday 6", opp: "Atalanta Bergamo",   oppShort: "ATA", home: true,  color: "#1E71B8", date: "09.12.25" },
   { round: "Ligaphase",   mdLabel: "Matchday 7", opp: "RB Salzburg",        oppShort: "SAL", home: false, color: "#ED1C24", date: "20.01.26" },
-  { round: "Ligaphase",   mdLabel: "Matchday 8", opp: "Stade Brest",        oppShort: "BRE", home: true,  color: "#E30613", date: "28.01.26" },
+  { round: "Ligaphase",   mdLabel: "Matchday 8", opp: "Stade Brest",        oppShort: "SB29", home: true,  color: "#E30613", date: "28.01.26" },
 
   // K.o.-Phase
-  { round: "Playoff",       mdLabel: "Playoff",       opp: "Celtic FC",          oppShort: "CEL", home: true,  color: "#009E60", date: "18.02.26", twoLeg: true },
+  { round: "Playoff",       mdLabel: "Playoff",       opp: "Celtic FC",          oppShort: "CEL_SCO", home: true,  color: "#009E60", date: "18.02.26", twoLeg: true },
   { round: "Achtelfinale",  mdLabel: "Achtelfinale",  opp: "Manchester City",    oppShort: "MCI", home: false, color: "#6CABDD", date: "10.03.26", twoLeg: true },
   { round: "Viertelfinale", mdLabel: "Viertelfinale", opp: "FC Bayern München",  oppShort: "FCB", home: false, color: "#DC0817", date: "07.04.26", twoLeg: true },
   { round: "Halbfinale",    mdLabel: "Halbfinale",    opp: "Arsenal FC",         oppShort: "ARS", home: true,  color: "#EF0107", date: "28.04.26", twoLeg: true },

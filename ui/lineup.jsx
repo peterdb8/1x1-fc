@@ -1,5 +1,5 @@
 // Lineup Editor — wähle Formation + 11 Spieler auf Positionen
-const Lineup = ({ squad, initial, onConfirm, onBack, match }) => {
+const Lineup = ({ squad, initial, onConfirm, onBack, match, teamId }) => {
   const [formation, setFormation] = useState(initial?.formation || "4-3-3");
   const [slots, setSlots] = useState(() => initial?.slots || autoFill(squad, "4-3-3"));
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -131,7 +131,7 @@ const Lineup = ({ squad, initial, onConfirm, onBack, match }) => {
                     textAlign: "center",
                   }}>
                   {p ? (
-                    <FutCard p={p} selected={isSelected} />
+                    <FutCard p={p} selected={isSelected} teamId={teamId} />
                   ) : (
                     <div style={{
                       width: 50, height: 50, borderRadius: "50%",
@@ -155,7 +155,7 @@ const Lineup = ({ squad, initial, onConfirm, onBack, match }) => {
           <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 11, letterSpacing: 2, color: "#DC0817", marginBottom: 10 }}>BANK & RESERVE</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 640, overflowY: "auto" }}>
             {bench.map(p => {
-              const cardUrl = window.cardForPlayer(p.name);
+              const cardUrl = window.cardForPlayer(p.name, teamId);
               return (
               <button key={p.n}
                 onClick={() => assignToSlot(p.n)}
@@ -200,8 +200,8 @@ const FieldLines = () => (
   </svg>
 );
 
-const FutCard = ({ p, selected }) => {
-  const url = window.cardForPlayer(p.name);
+const FutCard = ({ p, selected, teamId }) => {
+  const url = window.cardForPlayer(p.name, teamId);
   if (!url) {
     // Fallback: klassischer Kreis mit Nummer
     return (

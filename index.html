@@ -64,6 +64,7 @@
 <script src="engine/math.js"></script>
 <script src="engine/season.js"></script>
 <script src="engine/league_table.js"></script>
+<script src="engine/cpu_ai.js"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -281,6 +282,7 @@ function App() {
           initial={seasonState.lineup}
           match={match}
           team={team}
+          teamId={selectedTeam}
           onConfirm={onConfirmLineup}
           onBack={() => setScreen("menu")}
         />

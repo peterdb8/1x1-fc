@@ -59,7 +59,7 @@ const getContrastColor = (oppColor, teamColor) => {
   return alternatives.default;
 };
 
-const Gameplay = ({ match, lineup, squad, team, difficulty, onEnd, onBackToMenu }) => {
+const Gameplay = ({ match, lineup, squad, team, difficulty, difficultyConfig, onEnd, onBackToMenu }) => {
   const playerByN = Object.fromEntries(squad.map(p => [p.n, p]));
   const formSlots = window.FORMATIONS[lineup.formation];
 
@@ -67,6 +67,15 @@ const Gameplay = ({ match, lineup, squad, team, difficulty, onEnd, onBackToMenu 
   const myColor = team?.colors?.primary || "#DC0817";
   const oppColorRaw = match.color || "#333333";
   const oppColor = getContrastColor(oppColorRaw, myColor);
+
+  // --- CPU-KI: TeamBrain mit oppSkill aus Match-Daten ---
+  // oppSkill aus difficultyConfig extrahieren (basierend auf match.round)
+  const roundDifficulty = difficultyConfig?.[match.round] || difficultyConfig?.default || {};
+  const oppSkill = roundDifficulty.oppSkill || 0.5;
+  const cpuBrainRef = useRef(window.CpuAI ? window.CpuAI.createTeamBrain(oppSkill) : null);
+  const lastIntentUpdateRef = useRef(0);
+  const oppLastPassRef_AI = useRef(0);
+  const oppLastShotRef_AI = useRef(0);
 
   // --- Game state (React) ---
   const [phase, setPhase] = useState("kickoff"); // kickoff | play | duel | halftime | ended
@@ -88,6 +97,13 @@ const Gameplay = ({ match, lineup, squad, team, difficulty, onEnd, onBackToMenu 
   const pitchRef = useRef(null);
   const touchJoyRef = useRef({ x: 0, y: 0 });
   const sprintRef = useRef(false);
+  // Refs für Werte die in step() gebraucht werden
+  const timeLeftRef = useRef(timeLeft);
+  useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
+  const myScoreRef = useRef(myScore);
+  useEffect(() => { myScoreRef.current = myScore; }, [myScore]);
+  const oppScoreRef = useRef(oppScore);
+  useEffect(() => { oppScoreRef.current = oppScore; }, [oppScore]);
 
   useEffect(() => {
     document.body.classList.add("in-match");
@@ -196,11 +212,11 @@ const Gameplay = ({ match, lineup, squad, team, difficulty, onEnd, onBackToMenu 
     const players = playersRef.current;
     const ball = ballRef.current;
     const keys = keysRef.current;
+    const now = Date.now();
 
     // 1) Active Player Input (WASD/Pfeile)
     const active = players.find(p => p.id === activeIdRef.current);
     const PLAYER_SPEED = 14; // % pro sek
-    const OPP_SPEED = 11;
     const MATE_SPEED = 10;
 
     if (active) {
@@ -225,53 +241,186 @@ const Gameplay = ({ match, lineup, squad, team, difficulty, onEnd, onBackToMenu 
     // 2) AI für alle anderen Spieler
     const owner = players.find(p => p.id === ball.ownerId);
     const weHaveBall = owner && owner.team === "my";
+    const cpuHasBall = owner && owner.team === "opp";
+    const brain = cpuBrainRef.current;
+
+    // --- CPU TeamBrain Intent Update (alle 500ms) ---
+    if (brain && now - lastIntentUpdateRef.current > 500) {
+      lastIntentUpdateRef.current = now;
+      const currentTimeLeft = timeLeftRef.current;
+      const currentMyScore = myScoreRef.current;
+      const currentOppScore = oppScoreRef.current;
+      const matchMinute = (MATCH_DURATION_MS - currentTimeLeft) / 60000; // 0-5
+      brain.hasBall = cpuHasBall;
+      brain.scoreDiff = currentOppScore - currentMyScore; // positiv = CPU führt
+      brain.matchMinute = matchMinute;
+
+      if (cpuHasBall && now - brain.lastTurnoverAt > 100) {
+        // Erster Frame mit Ball nach Ballgewinn
+        if (!brain.hasBall) brain.lastTurnoverAt = now;
+      }
+
+      window.CpuAI.updateIntent(brain, {
+        weHaveBall: cpuHasBall,
+        ballX: ball.x,
+        timeNow: now,
+        scoreDiff: brain.scoreDiff,
+        matchMinute: matchMinute,
+      });
+    }
+
+    // --- Pressing-Spieler ermitteln (für koordiniertes Pressing) ---
+    const pressingIds = brain ? window.CpuAI.getPressingPlayers(brain, {
+      players, ballPos: ball, ownerPos: owner,
+    }) : [];
 
     for (const p of players) {
       if (p === active) continue;
 
       let target = { x: p.home.x, y: p.home.y };
-      let speed = p.team === "my" ? MATE_SPEED : OPP_SPEED;
+      let speed = p.team === "my" ? MATE_SPEED : 11;
 
-      if (p.team === "opp") {
-        // Ist dieser Gegner der Ball-Besitzer? → dribbeln Richtung unserem Tor, gelegentlich passen
+      if (p.team === "opp" && brain) {
+        // === CPU-KI mit TeamBrain ===
+        const params = brain.params;
+        const OPP_BASE_SPEED = 10 + params.pressIntensity * 3; // 10-13
+
         if (ball.ownerId === p.id) {
-          // Passentscheidung: Mitspieler, der näher an unserem Tor (x kleiner) steht
-          const mates = players.filter(x => x.team === "opp" && x.id !== p.id && x.role !== "GK");
-          const better = mates.find(m => m.x < p.x - 10 && Math.abs(m.y - p.y) < 35);
-          const now = Date.now();
-          if (better && now - oppLastPassRef.current > 2500 && Math.random() < 0.025) {
-            oppLastPassRef.current = now;
-            // Pass: Ball abgeben, neuer Owner = better
-            ball.ownerId = better.id;
-            setCommentary("Gegner kombiniert…");
+          // --- Ballbesitzer: Dribbeln + Pass/Schuss-Entscheidung ---
+          p.hasBall = true;
+
+          // Schuss-Check
+          if (!oppShotCooldown() && !postDuelCooldown()) {
+            const shouldShoot = window.CpuAI.shouldShoot(p, brain, {
+              timeNow: now,
+              lastShotAt: oppLastShotRef_AI.current,
+              matchMinute: brain.matchMinute,
+            });
+            if (shouldShoot) {
+              oppLastShotRef_AI.current = now;
+              tryOpponentShot(p);
+              continue;
+            }
           }
-          // Dribbel-Ziel: Richtung unseres Tores
+
+          // Pass-Check
+          const passTarget = window.CpuAI.shouldPass(p, brain, {
+            players,
+            ballPos: ball,
+            timeNow: now,
+            lastPassAt: oppLastPassRef_AI.current,
+          });
+          if (passTarget) {
+            oppLastPassRef_AI.current = now;
+            ball.ownerId = passTarget.id;
+            setCommentary(brain.intent === 'counter' ? "Schneller Konter!" : "Gegner kombiniert…");
+          }
+
+          // Dribbel-Ziel basierend auf Intent
+          if (brain.intent === 'counter') {
+            // Schneller Konter: direkt aufs Tor
+            target = { x: 5, y: 50 };
+            speed = OPP_BASE_SPEED * 1.15 * params.counterSpeed;
+          } else if (brain.intent === 'build_up') {
+            // Aufbau: langsamer, mehr Richtung Mitte
+            const yBias = p.y < 50 ? 55 : 45;
+            target = { x: Math.max(15, p.x - 10), y: yBias };
+            speed = OPP_BASE_SPEED * 0.85;
+          } else if (brain.intent === 'protect_lead') {
+            // Führung verwalten: Ball halten
+            target = { x: Math.max(40, p.x - 5), y: p.y };
+            speed = OPP_BASE_SPEED * 0.7;
+          } else {
+            // Standard: Richtung Tor
+            target = { x: 10, y: 50 };
+            speed = OPP_BASE_SPEED * 0.95;
+          }
+        } else {
+          p.hasBall = false;
+
+          if (ball.ownerId === null) {
+            // --- Loser Ball: Nächster jagt ---
+            const nearestOpp = nearestOf(players.filter(x => x.team === "opp"), ball);
+            if (nearestOpp && nearestOpp.id === p.id) {
+              target = ball;
+              speed = OPP_BASE_SPEED * 1.1;
+            } else {
+              target = biasToward(p.home, ball, 0.25);
+            }
+          } else if (weHaveBall) {
+            // --- Defensiv: Pressen oder Formation halten ---
+            const isPressing = pressingIds.includes(p.id);
+
+            if (isPressing && owner) {
+              // Direktes Pressing auf Ballbesitzer
+              target = { x: owner.x, y: owner.y };
+              speed = OPP_BASE_SPEED * (1 + params.pressIntensity * 0.25);
+              if (brain.intent === 'high_press') {
+                speed *= 1.15;
+              }
+            } else {
+              // Formation halten, Passwege zustellen
+              const lineX = 100 - params.lineHeight * 40; // Defensive Linie
+              const formationX = Math.max(p.home.x, lineX - (100 - p.home.x) * 0.4);
+              const adjustedHome = { x: formationX, y: p.home.y };
+
+              // Leicht zum Ball orientieren
+              target = biasToward(adjustedHome, ball, 0.2 * params.pressIntensity);
+              speed = OPP_BASE_SPEED * 0.9;
+            }
+          } else {
+            // --- CPU hat Ball (aber nicht dieser Spieler): Unterstützung ---
+            const role = p.role;
+            const isAttacker = role === "ST" || role === "LW" || role === "RW" || role === "CAM";
+            const isMidfielder = role === "CM" || role === "CDM" || role === "LM" || role === "RM";
+
+            if (brain.intent === 'counter') {
+              // Konter: Schnell nach vorne
+              const pushX = isAttacker ? Math.max(5, p.home.x - 35) :
+                           isMidfielder ? Math.max(15, p.home.x - 25) :
+                           Math.max(25, p.home.x - 15);
+              target = { x: pushX, y: p.home.y + (Math.random() - 0.5) * 10 };
+              speed = OPP_BASE_SPEED * params.counterSpeed;
+            } else if (brain.intent === 'direct_attack') {
+              // Angriff: Stark aufrücken
+              const pushX = isAttacker ? Math.max(8, p.home.x - 30) :
+                           isMidfielder ? Math.max(20, p.home.x - 20) :
+                           Math.max(30, p.home.x - 12);
+              target = biasToward({ x: pushX, y: p.home.y }, ball, 0.15);
+              speed = OPP_BASE_SPEED;
+            } else if (brain.intent === 'protect_lead') {
+              // Führung verwalten: Wenig aufrücken
+              target = biasToward(p.home, ball, 0.1);
+              speed = OPP_BASE_SPEED * 0.8;
+            } else {
+              // Aufbau: Moderat aufrücken, Anspielstationen bieten
+              const pushX = isAttacker ? Math.max(15, p.home.x - 20) :
+                           isMidfielder ? Math.max(25, p.home.x - 12) :
+                           p.home.x;
+              target = biasToward({ x: pushX, y: p.home.y }, ball, 0.15);
+              speed = OPP_BASE_SPEED * 0.9;
+            }
+          }
+        }
+      } else if (p.team === "opp") {
+        // Fallback wenn kein CpuAI geladen (alte Logik)
+        const OPP_SPEED = 11;
+        if (ball.ownerId === p.id) {
           target = { x: 10, y: 50 };
           speed = OPP_SPEED * 0.95;
-        } else if (ball.ownerId === null) {
-          const nearestOpp = nearestOf(players.filter(x => x.team === "opp"), ball);
-          if (nearestOpp && nearestOpp.id === p.id) target = ball;
-          else target = biasToward(p.home, ball, 0.25);
-        } else if (weHaveBall) {
-          // Pressen UND hoch stehen
+        } else if (weHaveBall && owner) {
           const nearestOpp = nearestOf(players.filter(x => x.team === "opp"), owner);
           if (nearestOpp && nearestOpp.id === p.id) {
             target = { x: owner.x, y: owner.y };
             speed = OPP_SPEED * 1.15;
           } else {
-            // Formation leicht zurückziehen + Richtung Ball
-            const pull = { x: Math.max(20, p.home.x - 8), y: p.home.y };
-            target = biasToward(pull, ball, 0.3);
+            target = biasToward(p.home, ball, 0.3);
           }
         } else {
-          // Gegner hat Ball → ALLE aufrücken Richtung unseres Tores (x 0)
-          const isKeeper = p.role === "GK";
-          const pushAmount = isKeeper ? 0 : 22;
-          const push = { x: Math.max(5, p.home.x - pushAmount), y: p.home.y };
-          target = biasToward(push, ball, 0.2);
+          target = biasToward(p.home, ball, 0.25);
         }
       } else {
-        // Mitspieler
+        // --- Mitspieler (eigenes Team) ---
         if (weHaveBall) {
           // Mit Ball: AUFRÜCKEN — Angreifer/Mittelfeld stark nach vorne
           const isKeeper = p.role === "GK";
@@ -411,7 +560,6 @@ const Gameplay = ({ match, lineup, squad, team, difficulty, onEnd, onBackToMenu 
 
   const postDuelEndRef = useRef(0);
   function postDuelCooldown() { return Date.now() - postDuelEndRef.current < 8000; }
-  const oppLastPassRef = useRef(0);
   const dispoImmuneRef = useRef(new Map());
 
   const oppShotCooldownRef = useRef(0);
