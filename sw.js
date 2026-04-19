@@ -1,7 +1,7 @@
 // 1×1 FC — Service Worker
 // Offline-first: cache everything on install, serve cache, update in background.
 
-const CACHE = '1x1fc-v9';
+const CACHE = '1x1fc-v15';
 
 // Alle App-Shell-Assets + Karten + CDN-Abhängigkeiten
 const ASSETS = [

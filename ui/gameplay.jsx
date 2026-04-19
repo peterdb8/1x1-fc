@@ -68,6 +68,11 @@ const Gameplay = ({ match, lineup, squad, team, difficulty, difficultyConfig, on
   const oppColorRaw = match.color || "#333333";
   const oppColor = getContrastColor(oppColorRaw, myColor);
 
+  // Team badges
+  const myBadge = team?.badge || null;
+  const myShort = team?.short || "FCB";
+  const oppBadge = window.TEAM_BADGES?.[match.oppShort] || null;
+
   // --- CPU-KI: TeamBrain mit oppSkill aus Match-Daten ---
   // oppSkill aus difficultyConfig extrahieren (basierend auf match.round)
   const roundDifficulty = difficultyConfig?.[match.round] || difficultyConfig?.default || {};
@@ -829,15 +834,52 @@ const Gameplay = ({ match, lineup, squad, team, difficulty, difficultyConfig, on
             zIndex: 5,
           }} />
 
+          {/* TV-Style Scoreboard oben links (nur Desktop) */}
+          {!window.IS_TOUCH && (phase === "play" || phase === "duel") && (
+            <div style={{
+              position: "absolute", top: 12, left: 12, zIndex: 20,
+              display: "flex", alignItems: "center", gap: 0,
+              background: "rgba(10,30,63,0.92)", borderRadius: 8,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+              overflow: "hidden",
+            }}>
+              {/* Eigenes Team */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: myColor }}>
+                <ScoreboardBadge url={myBadge} name={myShort} />
+                <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 14, color: "white" }}>{myShort}</span>
+              </div>
+              {/* Spielstand */}
+              <div style={{
+                padding: "6px 14px", background: "rgba(0,0,0,0.6)",
+                fontFamily: "'Archivo Black',sans-serif", fontSize: 18, color: "white",
+                minWidth: 60, textAlign: "center",
+              }}>
+                {myScore} : {oppScore}
+              </div>
+              {/* Gegner */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: oppColor }}>
+                <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 14, color: "white" }}>{match.oppShort}</span>
+                <ScoreboardBadge url={oppBadge} name={match.oppShort} />
+              </div>
+              {/* Zeit */}
+              <div style={{
+                padding: "6px 10px", background: "rgba(0,0,0,0.8)",
+                fontFamily: "Inter", fontWeight: 700, fontSize: 13, color: "#FFB800",
+              }}>
+                {formatTime(timeLeft)}
+              </div>
+            </div>
+          )}
+
           {phase === "kickoff" && (
             <Overlay>
               <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 11, letterSpacing: 3, color: "#FFB800" }}>{match.mdLabel.toUpperCase()}</div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20, margin: "16px 0 8px" }}>
-                <TeamBadge name={match.teamShort || "FCB"} color={myColor} badgeUrl={match.teamBadge} />
+                <TeamBadge name={myShort} color={myColor} badgeUrl={myBadge} />
                 <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 32, color: "white" }}>{match.home ? "vs" : "@"}</div>
-                <TeamBadge name={match.oppShort} color={oppColor} />
+                <TeamBadge name={match.oppShort} color={oppColor} badgeUrl={oppBadge} />
               </div>
-              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 18, color: "rgba(255,255,255,0.8)", marginBottom: 12 }}>{match.teamShort || "FCB"} vs {match.opp}</div>
+              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 18, color: "rgba(255,255,255,0.8)", marginBottom: 12 }}>{myShort} vs {match.opp}</div>
               <div style={{ fontFamily: "Inter", fontSize: 12, color: "rgba(255,255,255,0.75)", marginBottom: 18, textAlign: "center", maxWidth: 520 }}>
                 {window.IS_TOUCH
                   ? "Joystick links zum Bewegen · rechte Buttons für Aktionen · Tippen/Wischen auf dem Feld für Pass & Schuss"
@@ -956,30 +998,32 @@ const Gameplay = ({ match, lineup, squad, team, difficulty, difficultyConfig, on
             />
           )}
 
-          {/* FLOATING HUD TOP — Score + Timer + Menu, overlay wie EA FC Mobile */}
-          <div style={{
-            position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)",
-            display: "flex", alignItems: "center", gap: 10, zIndex: 12,
-            background: "rgba(6,15,34,0.85)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
-            padding: "8px 14px", borderRadius: 999,
-            border: "1px solid rgba(255,255,255,0.12)",
-            boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
-            color: "white",
-          }}>
-            <TeamBadge name={match.teamShort || "FCB"} color={myColor} small badgeUrl={match.teamBadge} />
-            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, letterSpacing: "-0.5px", minWidth: 68, textAlign: "center" }}>
-              {myScore}<span style={{ opacity: 0.5, margin: "0 6px" }}>:</span>{oppScore}
+          {/* FLOATING HUD TOP (Touch/Mobile) — zentriert wie EA FC Mobile */}
+          {window.IS_TOUCH && (
+            <div style={{
+              position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)",
+              display: "flex", alignItems: "center", gap: 10, zIndex: 12,
+              background: "rgba(6,15,34,0.85)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
+              padding: "8px 14px", borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.12)",
+              boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+              color: "white",
+            }}>
+              <TeamBadge name={myShort} color={myColor} small badgeUrl={myBadge} />
+              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, letterSpacing: "-0.5px", minWidth: 68, textAlign: "center" }}>
+                {myScore}<span style={{ opacity: 0.5, margin: "0 6px" }}>:</span>{oppScore}
+              </div>
+              <TeamBadge name={match.oppShort} color={oppColor} small badgeUrl={oppBadge} />
+              <div style={{ width: 1, height: 22, background: "rgba(255,255,255,0.18)" }} />
+              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 14, letterSpacing: "-0.3px", color: "#FFB800", minWidth: 48, textAlign: "center" }}>
+                {formatTime(MATCH_DURATION_MS - timeLeft)}'
+              </div>
             </div>
-            <TeamBadge name={match.oppShort} color={oppColor} small />
-            <div style={{ width: 1, height: 22, background: "rgba(255,255,255,0.18)" }} />
-            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 14, letterSpacing: "-0.3px", color: "#FFB800", minWidth: 48, textAlign: "center" }}>
-              {formatTime(MATCH_DURATION_MS - timeLeft)}'
-            </div>
-          </div>
+          )}
 
-          {/* Menü-Button: oben links */}
+          {/* Menü-Button: oben rechts (neben TV-Scoreboard auf Desktop, oben links auf Touch) */}
           <button onClick={onBackToMenu} style={{
-            position: "absolute", top: 10, left: 10, zIndex: 12,
+            position: "absolute", top: 12, right: window.IS_TOUCH ? "auto" : 12, left: window.IS_TOUCH ? 10 : "auto", zIndex: 21,
             width: 38, height: 38, borderRadius: "50%",
             background: "rgba(6,15,34,0.85)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
             border: "1px solid rgba(255,255,255,0.15)",
@@ -1028,10 +1072,34 @@ const Gameplay = ({ match, lineup, squad, team, difficulty, difficultyConfig, on
   );
 };
 
+// Badge mit Fallback bei 404
+const ScoreboardBadge = ({ url, name }) => {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) {
+    return (
+      <div style={{
+        width: 20, height: 20, borderRadius: 4,
+        background: "rgba(255,255,255,0.2)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "'Archivo Black',sans-serif", fontSize: 8, color: "white",
+      }}>{name?.slice(0,2)}</div>
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt={name}
+      onError={() => setFailed(true)}
+      style={{ width: 20, height: 20, objectFit: "contain" }}
+    />
+  );
+};
+
 const TeamBadge = ({ name, color, small, badgeUrl }) => {
+  const [failed, setFailed] = useState(false);
   const size = small ? 26 : 32;
-  const hasBadge = badgeUrl || (window.TEAM_BADGES && window.TEAM_BADGES[name]);
   const imgUrl = badgeUrl || (window.TEAM_BADGES && window.TEAM_BADGES[name]);
+  const hasBadge = imgUrl && !failed;
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1039,6 +1107,7 @@ const TeamBadge = ({ name, color, small, badgeUrl }) => {
         <img
           src={imgUrl}
           alt={name}
+          onError={() => setFailed(true)}
           style={{
             width: size,
             height: size,
